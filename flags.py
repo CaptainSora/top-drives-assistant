@@ -91,6 +91,7 @@ class State:
     access: tuple[bool, ...]
     reward: Reward
     cdata: ChallengeData
+    max_frontier: int
     min_chapter: int = 0
 
     def max_rnds(self, chapter: int) -> int:
@@ -103,17 +104,22 @@ class State:
                 continue
 
             rnd = self.progress[chapter]
-            if rnd == self.max_rnds(chapter) and not is_frontier(chapter):
+            if rnd == self.max_rnds(chapter):
                 continue
 
             rnd_cost = self.cdata.costs[chapter][rnd]
             if self.nflags < rnd_cost:
                 continue
 
+            if is_frontier(chapter) and rnd >= self.max_frontier:
+                continue
+
             new_progress = list(self.progress)
             new_progress[chapter] += 1
             new_access = list(self.access)
-            if new_progress[chapter] == self.max_rnds(chapter):
+            if new_progress[chapter] == self.max_rnds(chapter) and not is_frontier(
+                chapter
+            ):
                 new_access[chapter + 1] = True
 
             new_states.append(
@@ -123,6 +129,7 @@ class State:
                     access=tuple(new_access),
                     reward=self.reward + self.cdata.rewards[chapter][rnd],
                     cdata=self.cdata,
+                    max_frontier=self.max_frontier,
                     min_chapter=max(self.min_chapter, chapter),
                 )
             )
@@ -171,6 +178,7 @@ def outcomes(
     nflags: int,
     progress: Iterable[int],
     access: Iterable[bool],
+    max_frontier: int,
     season_name: str = "default",
 ):
     cdata = load_challenge_data(season_name)
@@ -182,6 +190,7 @@ def outcomes(
             access=tuple(access),
             reward=Reward(),
             cdata=cdata,
+            max_frontier=max_frontier,
         )
     ]
     terminal: list[State] = []
@@ -400,10 +409,14 @@ with st.container(border=True):
         access = [
             st.session_state[f"on_{chapter_name}"] for chapter_name in CHAPTER_NAMES
         ]
+        max_frontier = (
+            progress[-1] + 5 if st.session_state.get("tog_frontier", False) else 25
+        )
         results = outcomes(
             nflags=st.session_state.get("flags_remaining", 0),
             progress=progress,
             access=access,
+            max_frontier=max_frontier,
         )
         for i in range(st.session_state.get("num_displayed_results", 1)):
             display_outcome(results[i], progress, i + 1)
@@ -458,3 +471,4 @@ st.markdown(f"<style>{icon_rules}</style>", unsafe_allow_html=True)
 st.divider()
 st.caption("Made with love by @CapSora")
 st.caption("All game assets property of Hutch Games Ltd.")
+st.caption("Special thanks to @TiagoXavi")
